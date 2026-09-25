@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blackjack entre amis</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🂡</text></svg>" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+
+<div id="toast" class="toast"></div>
+
+<!-- Écran d'authentification -->
+<section id="screen-auth" class="screen">
+  <div class="auth-card">
+    <div class="brand">🂡 <span>Blackjack</span></div>
+    <p class="tagline">Jouez entre amis, jusqu'à 10 joueurs par table.</p>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="login">Connexion</button>
+      <button class="tab" data-tab="register">Créer un compte</button>
+    </div>
+
+    <form id="form-login" class="auth-form">
+      <input type="text" name="username" placeholder="Pseudo" autocomplete="username" required />
+      <input type="password" name="password" placeholder="Mot de passe" autocomplete="current-password" required />
+      <button type="submit" class="btn primary">Se connecter</button>
+    </form>
+
+    <form id="form-register" class="auth-form hidden">
+      <input type="text" name="username" placeholder="Pseudo (3-20 caractères)" autocomplete="username" required />
+      <input type="password" name="password" placeholder="Mot de passe (6+ caractères)" autocomplete="new-password" required />
+      <button type="submit" class="btn primary">Créer mon compte</button>
+    </form>
+  </div>
+</section>
+
+<!-- Écran lobby -->
+<section id="screen-lobby" class="screen hidden">
+  <header class="topbar">
+    <div class="brand small">🂡 Blackjack</div>
+    <div class="topbar-user">
+      <span id="lobby-username" class="chip-pill"></span>
+      <span id="lobby-chips" class="chip-pill gold"></span>
+      <button id="btn-logout" class="btn ghost">Déconnexion</button>
+    </div>
+  </header>
+
+  <main class="lobby-main">
+    <div class="panel">
+      <h2>Rejoindre une partie</h2>
+      <button id="btn-create-table" class="btn primary full">Créer une table</button>
+      <div class="join-row">
+        <input id="join-code" placeholder="Code de table" maxlength="6" />
+        <button id="btn-join-table" class="btn secondary">Rejoindre</button>
+      </div>
+      <p class="hint">Le code de la table s'affiche une fois créée : partagez-le à vos amis pour qu'ils vous rejoignent.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <h2>Classement</h2>
+        <button id="btn-refresh-leaderboard" class="btn ghost small">↻</button>
+      </div>
+      <table class="leaderboard">
+        <thead>
+          <tr><th>#</th><th>Joueur</th><th>Jetons</th><th>Parties</th><th>Victoires</th></tr>
+        </thead>
+        <tbody id="leaderboard-body"></tbody>
+      </table>
+    </div>
+  </main>
+</section>
+
+<!-- Écran table de jeu -->
+<section id="screen-table" class="screen hidden">
+  <header class="topbar">
+    <div class="brand small">🂡 Blackjack</div>
+    <div class="topbar-user">
+      <span class="chip-pill">Table <b id="table-code-label"></b></span>
+      <button id="btn-copy-code" class="btn ghost small">Copier le code</button>
+      <button id="btn-leave-table" class="btn ghost">Quitter</button>
+    </div>
+  </header>
+
+  <main class="felt">
+    <div class="dealer-area">
+      <div class="area-label">Croupier</div>
+      <div id="dealer-hand" class="hand"></div>
+      <div id="dealer-total" class="total"></div>
+    </div>
+
+    <div id="seats" class="seats"></div>
+
+    <div class="log-panel">
+      <div id="table-log"></div>
+    </div>
+
+    <div class="controls">
+      <div id="controls-idle" class="controls-row">
+        <button id="btn-start-round" class="btn primary">Démarrer une manche</button>
+      </div>
+      <div id="controls-bet" class="controls-row hidden">
+        <input id="bet-amount" type="number" min="10" step="10" placeholder="Mise" />
+        <button id="btn-place-bet" class="btn primary">Miser</button>
+      </div>
+      <div id="controls-play" class="controls-row hidden">
+        <button id="btn-hit" class="btn secondary">Tirer</button>
+        <button id="btn-stand" class="btn secondary">Rester</button>
+        <button id="btn-double" class="btn secondary">Doubler</button>
+      </div>
+      <div id="controls-waiting" class="controls-row hidden">
+        <span class="hint" id="waiting-text">En attente…</span>
+      </div>
+      <div id="controls-rebuy" class="controls-row hidden">
+        <span class="hint">Vous n'avez plus de jetons.</span>
+        <button id="btn-rebuy" class="btn secondary">Recharger 500 jetons</button>
+      </div>
+    </div>
+  </main>
+</section>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
