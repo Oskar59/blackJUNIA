@@ -83,6 +83,14 @@ app.post('/api/rebuy', requireAuth, (req, res) => {
   if (!user) return res.status(404).json({ error: 'Utilisateur introuvable.' });
   if (user.chips > 0) return res.status(400).json({ error: 'Vous avez encore des jetons.' });
   const updated = store.updateUser(user.username, { chips: 500 });
+  // répercute les jetons sur les tables où le joueur est assis
+  for (const table of manager.tables.values()) {
+    const p = table.findPlayer(user.username);
+    if (p) {
+      p.chips = updated.chips;
+      broadcastTable(table);
+    }
+  }
   res.json({ user: store.publicUser(updated) });
 });
 
@@ -150,6 +158,10 @@ io.on('connection', (socket) => {
   socket.on('round:start', () => {
     const table = tableFor(socket);
     if (!table) return;
+    for (const p of table.players) {
+      const u = store.getUser(p.username);
+      if (u) p.chips = u.chips;
+    }
     const res = table.startBettingRound();
     if (!res.ok) return socket.emit('error', { message: res.error });
     broadcastTable(table);

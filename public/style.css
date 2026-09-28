@@ -274,3 +274,74 @@ input:focus { border-color: var(--gold); }
   z-index: 999;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Animation BLACKJACK ---------- */
+.bj-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  z-index: 1000;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0) 70%);
+  animation: bj-flash 0.5s steps(2) 3;
+}
+.bj-text {
+  font-size: clamp(38px, 9vw, 96px);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #fff;
+  text-shadow:
+    0 0 10px #ffe98a, 0 0 22px #ff5ecb, 0 0 36px #5ef1ff,
+    3px 3px 0 #17130a;
+  animation: bj-pop 1.8s cubic-bezier(.2,1.4,.4,1) forwards, bj-hue 1.8s linear forwards, bj-shake 0.4s ease-in-out 3;
+  transform: scale(0) rotate(-8deg);
+  white-space: nowrap;
+}
+.bj-sub {
+  font-size: clamp(14px, 2.6vw, 22px);
+  font-weight: 700;
+  color: var(--gold);
+  text-shadow: 0 0 10px rgba(230,192,92,0.7);
+  animation: bj-sub-in 1.8s ease forwards;
+  opacity: 0;
+}
+@keyframes bj-pop {
+  0%   { transform: scale(0) rotate(-8deg); }
+  15%  { transform: scale(1.25) rotate(4deg); }
+  30%  { transform: scale(0.95) rotate(-2deg); }
+  45%  { transform: scale(1.08) rotate(1deg); }
+  60%  { transform: scale(1) rotate(0deg); }
+  80%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.85) rotate(0deg); opacity: 0; }
+}
+@keyframes bj-hue {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+@keyframes bj-shake {
+  0%, 100% { margin-left: 0; }
+  25% { margin-left: -6px; }
+  75% { margin-left: 6px; }
+}
+@keyframes bj-sub-in {
+  0% { opacity: 0; transform: translateY(10px); }
+  20% { opacity: 1; transform: translateY(0); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes bj-flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(255,255,255,0.08); }
+}
+
+/* ---------- Distribution des cartes ---------- */
+.card.card-deal { animation: card-deal 0.45s cubic-bezier(.2,.9,.3,1.2) both; }
+@keyframes card-deal {
+  0%   { opacity: 0; transform: translate(0, -160px) rotate(-18deg) scale(0.7); }
+  60%  { opacity: 1; transform: translate(0, 6px) rotate(4deg) scale(1.05); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+}

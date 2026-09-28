@@ -9,6 +9,10 @@
   let me = null;       // { username, chips, ... }
   let socket = null;
   let tableState = null;
+  let betDefaultSetForRound = null; // évite d'écraser la saisie du joueur à chaque state
+  let previousStatuses = {};        // username -> statut précédent, pour détecter les transitions
+  let previousHandLengths = { dealer: 0, players: {} }; // pour n'animer que les cartes nouvellement distribuées
+  let sawFirstState = false;        // évite d'animer tout dès le premier état reçu (reload / reconnexion)
 
   function showScreen(name) {
     Object.values(screens).forEach((s) => s.classList.add('hidden'));
@@ -80,6 +84,10 @@
     socket = io();
     socket.on('table:joined', ({ code }) => {
       $('#table-code-label').textContent = code;
+      betDefaultSetForRound = null;
+      previousStatuses = {};
+      previousHandLengths = { dealer: 0, players: {} };
+      sawFirstState = false;
       showScreen('table');
     });
     socket.on('table:state', (state) => {
@@ -93,10 +101,23 @@
   // ---------- Lobby ----------
   function enterLobby() {
     $('#lobby-username').textContent = me.username;
-    $('#lobby-chips').innerHTML = `<b>${me.chips}</b> jetons`;
+    renderLobbyChips();
     showScreen('lobby');
     loadLeaderboard();
   }
+
+  function renderLobbyChips() {
+    $('#lobby-chips').innerHTML = `<b>${me.chips}</b> jetons`;
+    $('#btn-lobby-rebuy').classList.toggle('hidden', me.chips > 0);
+  }
+
+  $('#btn-lobby-rebuy').addEventListener('click', async () => {
+    try {
+      const { user } = await api('/api/rebuy');
+      me = user;
+      renderLobbyChips();
+    } catch (err) { toast(err.message); }
+  });
 
   async function fetchMe() {
     const res = await fetch('/api/me');
@@ -129,8 +150,12 @@
   $('#btn-leave-table').addEventListener('click', () => {
     socket.emit('table:leave');
     tableState = null;
+    betDefaultSetForRound = null;
+    previousStatuses = {};
+    previousHandLengths = { dealer: 0, players: {} };
+    sawFirstState = false;
     showScreen('lobby');
-    fetchMe().then(({ user }) => { if (user) { me = user; $('#lobby-chips').innerHTML = `<b>${me.chips}</b> jetons`; } });
+    fetchMe().then(({ user }) => { if (user) { me = user; renderLobbyChips(); } });
     loadLeaderboard();
   });
 
@@ -157,14 +182,19 @@
     try {
       const { user } = await api('/api/rebuy');
       me = user;
-      renderTable();
+      if (tableState) {
+        const mine = tableState.players.find((p) => p.username === me.username);
+        if (mine) mine.chips = me.chips;
+        renderTable();
+      }
     } catch (err) { toast(err.message); }
   });
 
-  function cardHtml(card) {
-    if (!card) return '<div class="card hidden-card"></div>';
+  function cardHtml(card, animate = false, delayIndex = 0) {
+    const anim = animate ? ` card-deal" style="animation-delay:${Math.max(0, delayIndex) * 0.18}s` : '';
+    if (!card) return `<div class="card hidden-card"></div>`;
     const red = card.s === '♥' || card.s === '♦';
-    return `<div class="card ${red ? 'red' : ''}">${card.r}<span style="font-size:12px">${card.s}</span></div>`;
+    return `<div class="card ${red ? 'red' : ''}${anim}">${card.r}<span style="font-size:12px">${card.s}</span></div>`;
   }
 
   function statusLabel(status) {
@@ -178,11 +208,21 @@
     if (!tableState) return;
     $('#table-code-label').textContent = tableState.code;
 
-    $('#dealer-hand').innerHTML = tableState.dealer.hand.map(cardHtml).join('') +
+    const isFirstRender = !sawFirstState;
+
+    const dHand = tableState.dealer.hand;
+    const dPrev = isFirstRender ? dHand.length : previousHandLengths.dealer;
+    $('#dealer-hand').innerHTML = dHand.map((c, i) => cardHtml(c, !isFirstRender && i >= dPrev, i - dPrev)).join('') +
       (tableState.dealer.hidden ? cardHtml(null) : '');
+    previousHandLengths.dealer = dHand.length;
     $('#dealer-total').textContent = tableState.dealer.hidden ? '' : `Total : ${tableState.dealer.total}`;
 
+    detectBlackjacks(isFirstRender);
+
     $('#seats').innerHTML = tableState.players.map((p) => {
+      const pPrev = isFirstRender ? p.hand.length : (previousHandLengths.players[p.username] || 0);
+      const handHtml = p.hand.map((c, i) => cardHtml(c, !isFirstRender && i >= pPrev, i - pPrev)).join('');
+      previousHandLengths.players[p.username] = p.hand.length;
       const isMe = p.username === me.username;
       const isTurn = tableState.phase === 'playing' && p.seat === tableState.turnIndex;
       let badgeClass = '';
@@ -197,7 +237,7 @@
         <div class="seat ${isTurn ? 'turn' : ''} ${p.connected ? '' : 'disconnected'}">
           <div class="name">${escapeHtml(p.username)} ${isMe ? '<span class="you">(vous)</span>' : ''}</div>
           <div class="chips">${p.chips} jetons ${p.bet ? `· mise ${p.bet}` : ''}</div>
-          <div class="hand">${p.hand.map(cardHtml).join('') || ''}</div>
+          <div class="hand">${handHtml}</div>
           ${p.hand.length ? `<div class="total">${p.total}</div>` : ''}
           <span class="status-badge ${badgeClass}">${badgeText}</span>
         </div>
@@ -207,6 +247,7 @@
     $('#table-log').innerHTML = tableState.log.map(escapeHtml).join('<br>');
 
     updateControls();
+    sawFirstState = true;
   }
 
   function updateControls() {
@@ -216,7 +257,7 @@
     const myPlayer = tableState.players.find((p) => p.username === me.username);
     if (!myPlayer) return;
 
-    if (myPlayer.chips <= 0 && (tableState.phase === 'lobby' || tableState.phase === 'results')) {
+    if (myPlayer.chips <= 0) {
       $('#controls-rebuy').classList.remove('hidden');
       return;
     }
@@ -229,8 +270,13 @@
     if (tableState.phase === 'betting') {
       if (myPlayer.status === 'betting') {
         $('#controls-bet').classList.remove('hidden');
-        $('#bet-amount').value = tableState.minBet;
         $('#bet-amount').min = tableState.minBet;
+        // ne fixe la valeur par défaut qu'une seule fois par manche, sinon la saisie
+        // en cours d'un joueur est écrasée à chaque fois qu'un autre joueur mise.
+        if (betDefaultSetForRound !== tableState.round) {
+          $('#bet-amount').value = tableState.minBet;
+          betDefaultSetForRound = tableState.round;
+        }
       } else {
         $('#controls-waiting').classList.remove('hidden');
         $('#waiting-text').textContent = 'En attente des autres joueurs…';
@@ -252,6 +298,60 @@
     if (tableState.phase === 'dealer') {
       $('#controls-waiting').classList.remove('hidden');
       $('#waiting-text').textContent = 'Le croupier joue…';
+    }
+  }
+
+  // Détecte les transitions vers le statut "blackjack" pour déclencher l'animation,
+  // sans la redéclencher à chaque state broadcast ni au premier chargement (reload en résultats).
+  function detectBlackjacks(isFirstRender) {
+    if (isFirstRender) {
+      tableState.players.forEach((p) => (previousStatuses[p.username] = p.status));
+      return;
+    }
+    tableState.players.forEach((p) => {
+      const prev = previousStatuses[p.username];
+      if (p.status === 'blackjack' && prev !== 'blackjack') {
+        playBlackjackAnimation(p.username === me.username ? 'VOUS' : p.username);
+      }
+      previousStatuses[p.username] = p.status;
+    });
+  }
+
+  function playBlackjackAnimation(label) {
+    const overlay = document.createElement('div');
+    overlay.className = 'bj-overlay';
+    overlay.innerHTML = `
+      <div class="bj-text">🔥 BLACKJACK 🔥</div>
+      <div class="bj-sub">${escapeHtml(label)}</div>
+    `;
+    document.body.appendChild(overlay);
+    setTimeout(() => overlay.remove(), 1800);
+    playBlackjackSound();
+  }
+
+  // Petit jingle synthétisé (pas de fichier audio externe, donc pas de souci de droits) :
+  // un enchaînement rapide de notes montantes façon "victoire".
+  function playBlackjackSound() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new Ctx();
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // do-mi-sol-do
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        const start = ctx.currentTime + i * 0.09;
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.18, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.16);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.18);
+      });
+      setTimeout(() => ctx.close(), 900);
+    } catch {
+      // certains navigateurs bloquent l'audio sans interaction préalable : on ignore silencieusement
     }
   }
 
